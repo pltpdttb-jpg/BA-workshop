@@ -1,0 +1,1038 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  BookOpen, 
+  MessageCircle, 
+  TrendingUp, 
+  Calculator, 
+  CheckCircle, 
+  XCircle, 
+  ArrowRight, 
+  Home, 
+  Award,
+  RefreshCcw,
+  Shield,
+  Target,
+  Users,
+  Layers,
+  ListChecks,
+  ChevronUp,
+  ChevronDown,
+  PlayCircle,
+  Sparkles
+} from 'lucide-react';
+
+// --- STYLES FOR ANIMATION ---
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+  @keyframes slide-up-fade {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up {
+    animation: slide-up-fade 0.8s ease-out forwards;
+  }
+  .animate-delay-100 { animation-delay: 0.1s; }
+  .animate-delay-200 { animation-delay: 0.2s; }
+  .animate-delay-300 { animation-delay: 0.3s; }
+  
+  .luxury-gradient {
+    background: radial-gradient(circle at center, #b91c1c 0%, #7f1d1d 60%, #450a0a 100%);
+  }
+`;
+document.head.appendChild(style);
+
+// --- UTILS ---
+
+const shuffleArray = (array) => {
+  const newArr = [...array];
+  for (let i = newArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+  }
+  return newArr;
+};
+
+const getRandomSubset = (pool, count) => {
+  const shuffled = shuffleArray(pool);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+};
+
+const formatNumber = (num) => {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
+
+// --- EXPANDED DATA POOLS (To support 10 questions per round) ---
+
+const FAB_POOL = [
+  // --- Original ---
+  {
+    id: 'f1',
+    qType: 'single',
+    text: "แบบประกันนี้ชำระเบี้ยเพียง 5 ปี แต่คุ้มครองถึงอายุ 99 ปี",
+    options: ["Feature (คุณลักษณะ)", "Advantage (ข้อได้เปรียบ)", "Benefit (ประโยชน์)"],
+    correctIndex: 0,
+    explanation: "เพราะเป็นข้อเท็จจริง/เงื่อนไขของสัญญาที่ระบุไว้ชัดเจน ไม่ใช่ความรู้สึก หรือการเปรียบเทียบ"
+  },
+  {
+    id: 'f2',
+    qType: 'single',
+    text: "พี่จะหมดห่วงเรื่องค่าใช้จ่ายในการรักษา เพราะวงเงินเหมาจ่ายนี้ครอบคลุมค่าห้องและค่าผ่าตัด",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 2,
+    explanation: "คีย์เวิร์ดคือ 'หมดห่วง' ซึ่งเป็นความรู้สึกหรือผลประโยชน์ทางอารมณ์ที่ลูกค้าได้รับโดยตรง"
+  },
+  {
+    id: 'f3',
+    qType: 'single',
+    text: "มีเงินปันผลคืนทุกปี ปีละ 1% ของทุนประกัน ตั้งแต่ปีแรก",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 0,
+    explanation: "ระบุเงื่อนไขผลตอบแทนชัดเจน เป็น Feature ของสินค้า"
+  },
+  {
+    id: 'f4',
+    qType: 'multi',
+    text: "ข้อใดต่อไปนี้จัดเป็น 'Benefit' (ประโยชน์) ที่ลูกค้าจะได้รับ (เลือกให้ครบ)",
+    options: [
+      "ลดหย่อนภาษีได้สูงสุด 100,000 บาท",
+      "รู้สึกอุ่นใจเหมือนมีเงินสำรองก้อนใหญ่",
+      "บริษัทมีความมั่นคงทางการเงินสูง",
+      "เป็นหลักประกันให้ลูกเรียนจบแน่นอน"
+    ],
+    correctIndices: [1, 3],
+    explanation: "ข้อ 1, 3 เป็น Feature/Advantage ส่วน Benefit คือความรู้สึกอุ่นใจ (2) และความมั่นคงในอนาคต (4)"
+  },
+  {
+    id: 'f5',
+    qType: 'multi',
+    text: "ข้อใดคือ 'Advantage' (ข้อได้เปรียบ) ของแบบประกัน Unit Linked (เลือกให้ครบ)",
+    options: [
+      "มีความยืดหยุ่น ปรับลด-เพิ่มวงเงินคุ้มครองได้ตามช่วงชีวิต",
+      "มีโอกาสได้รับผลตอบแทนที่สูงกว่าการฝากเงินทั่วไป",
+      "เบี้ยประกันนำไปลงทุนในกองทุนรวม",
+      "คุ้มครองเสียชีวิต 100 เท่า"
+    ],
+    correctIndices: [0, 1],
+    explanation: "ข้อ 0, 1 คือข้อดีที่เหนือกว่าแบบทั่วไป ส่วน 2, 3 เป็นลักษณะสินค้า (Feature)"
+  },
+  // --- New Additions ---
+  {
+    id: 'f6',
+    qType: 'single',
+    text: "เบี้ยประกันคงที่ตลอดสัญญา ไม่ปรับเพิ่มตามอายุ",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 1,
+    explanation: "เป็น Advantage (ข้อได้เปรียบ) เมื่อเทียบกับแบบประกันอื่นที่เบี้ยปรับเพิ่มตามอายุ"
+  },
+  {
+    id: 'f7',
+    qType: 'single',
+    text: "พี่จะมีความสุขทุกครั้งที่เห็นเงินก้อนนี้เติบโตเพื่อการศึกษาลูก",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 2,
+    explanation: "เน้นที่ 'ความสุข' และความพึงพอใจทางใจของลูกค้า (Benefit)"
+  },
+  {
+    id: 'f8',
+    qType: 'single',
+    text: "ความคุ้มครองโรคร้ายแรงครอบคลุมถึง 50 โรค",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 0,
+    explanation: "เป็นข้อมูลจำเพาะของผลิตภัณฑ์ (Feature)"
+  },
+  {
+    id: 'f9',
+    qType: 'single',
+    text: "ช่วยให้พี่ไม่ต้องดึงเงินเก็บทั้งชีวิตมาจ่ายค่ารักษาพยาบาลเพียงครั้งเดียว",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 1,
+    explanation: "เป็นการทำงานของสินค้าที่ช่วยแก้ปัญหา (Advantage)"
+  },
+  {
+    id: 'f10',
+    qType: 'multi',
+    text: "ข้อใดเป็น Feature (คุณลักษณะ) ทั้งหมด (เลือกให้ครบ)",
+    options: [
+      "ระยะเวลารอคอย 30 วัน",
+      "ทำให้ครอบครัวมั่นคง",
+      "เบี้ยประกันนำไปลดหย่อนภาษีได้",
+      "คุ้มครองการเสียชีวิตทุกกรณี"
+    ],
+    correctIndices: [0, 2, 3],
+    explanation: "ข้อ 1 คือ Benefit ส่วนที่เหลือเป็นเงื่อนไขตามสัญญา (Feature)"
+  },
+  {
+    id: 'f11',
+    qType: 'single',
+    text: "พี่ภาคภูมิใจได้เลยครับ ที่ได้ส่งต่อมรดกนี้ให้ลูกหลาน",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 2,
+    explanation: "ความรู้สึกภาคภูมิใจ คือ Benefit"
+  },
+  {
+    id: 'f12',
+    qType: 'single',
+    text: "ไม่ต้องตรวจสุขภาพ เพียงตอบคำถามสุขภาพ 3 ข้อ",
+    options: ["Feature", "Advantage", "Benefit"],
+    correctIndex: 0,
+    explanation: "เป็นเงื่อนไขการรับประกัน (Feature)"
+  }
+];
+
+const QUESTION_POOL = [
+  // --- Original ---
+  {
+    id: 'q1',
+    qType: 'single',
+    text: "ประโยคใดเหมาะสมที่สุดในการ 'เปิดใจ' ลูกค้าที่เป็นเจ้าของธุรกิจ",
+    options: [
+      "ช่วงนี้ธุรกิจเป็นยังไงบ้างครับ กำไรดีไหม?",
+      "พี่เคยวางแผน Keyman Protection ไว้บ้างหรือยังครับ?",
+      "ปกติพี่บริหารความเสี่ยงของกระแสเงินสดในธุรกิจอย่างไรบ้างครับ หากเกิดเหตุไม่คาดฝัน?",
+      "สนใจทำประกันลดหย่อนภาษีบริษัทไหมครับ?"
+    ],
+    correctIndex: 2,
+    explanation: "ข้อ 3 เป็นคำถามเปิดเชิง Consult ที่ดูเป็นมืออาชีพและชวนให้ลูกค้าเล่าปัญหาได้ดีที่สุด"
+  },
+  {
+    id: 'q2',
+    qType: 'single',
+    text: "หากลูกค้าตอบว่า 'มีประกันเยอะแล้ว' ควรใช้คำถามใดเพื่อไปต่อ?",
+    options: [
+      "งั้นขออนุญาตดูเล่มกรมธรรม์หน่อยได้ไหมครับ?",
+      "ดีเลยครับพี่ แสดงว่าพี่เห็นความสำคัญ แล้วส่วนใหญ่เน้นเรื่องสุขภาพหรือการออมครับ?",
+      "แต่ของผมดีกว่านะครับ ลองฟังดูก่อน",
+      "ทำไมถึงทำเยอะจังครับ?"
+    ],
+    correctIndex: 1,
+    explanation: "ข้อ 1 ชมเชยและถามต่อเพื่อแยกประเภท (Fact Finding) ดีที่สุด ไม่คุกคามจนเกินไป"
+  },
+  {
+    id: 'q3',
+    qType: 'multi',
+    text: "คำถามใดเป็น 'คำถามปลายเปิด' (Open-Ended Question) ที่ช่วยค้นหา Needs (เลือกให้ครบ)",
+    options: [
+      "พี่กังวลเรื่องค่ารักษาพยาบาลไหมครับ?",
+      "ถ้าเลือกได้ พี่อยากให้เงินก้อนนี้ดูแลใครเป็นพิเศษครับ?",
+      "พี่วางแผนเกษียณไว้อย่างไรบ้างครับ?",
+      "ดอกเบี้ยแบงค์ช่วงนี้ไม่ดีใช่ไหมครับ?"
+    ],
+    correctIndices: [1, 2],
+    explanation: "ข้อ 2 และ 3 ให้ลูกค้าอธิบายความต้องการ ส่วนข้อ 1 และ 4 ตอบแค่ ใช่/ไม่ใช่"
+  },
+  // --- New Additions ---
+  {
+    id: 'q4',
+    qType: 'single',
+    text: "คำถามใด *ไม่ใช่* คำถามปลายเปิด?",
+    options: [
+      "พี่คิดเห็นอย่างไรกับเรื่องนี้ครับ?",
+      "เป้าหมายการเงินของพี่คืออะไรครับ?",
+      "พี่เคยทำประกันสุขภาพมาก่อนไหมครับ?",
+      "พี่วางแผนเรื่องทุนการศึกษาลูกไว้อย่างไรครับ?"
+    ],
+    correctIndex: 2,
+    explanation: "เพราะตอบได้แค่ เคย/ไม่เคย เป็นคำถามปิด (Closed Question)"
+  },
+  {
+    id: 'q5',
+    qType: 'multi',
+    text: "ข้อใดเป็นคำถามเพื่อค้นหาข้อเท็จจริง (Fact-Finding) ที่ดี (เลือกให้ครบ)",
+    options: [
+      "ปกติพี่ออมเงินไว้ประมาณกี่ % ของรายได้ครับ?",
+      "พี่มีภาระหนี้สินระยะยาวที่กังวลไหมครับ?",
+      "ประกันตัวนี้ดีที่สุดในตลาด พี่เชื่อผมไหม?",
+      "ปัจจุบันสวัสดิการค่ารักษาของพี่วงเงินเท่าไหร่ครับ?"
+    ],
+    correctIndices: [0, 1, 3],
+    explanation: "คำถาม Fact-Finding ควรถามเกี่ยวกับข้อมูลจริง ตัวเลข หรือสวัสดิการที่มีอยู่"
+  },
+  {
+    id: 'q6',
+    qType: 'single',
+    text: "เมื่อลูกค้าบอกว่า 'ขอปรึกษาแฟนก่อน' ควรตอบอย่างไร?",
+    options: [
+      "แฟนพี่คงไม่ว่าหรอกครับ ทำเลยเถอะ",
+      "ได้ครับ งั้นผมขอกลับบ้านก่อนนะครับ",
+      "เป็นเรื่องที่ดีครับพี่ ปกติพี่กับแฟนใครเป็นคนตัดสินใจเรื่องการเงินหลักครับ?",
+      "รีบหน่อยนะครับ โปรโมชันจะหมดแล้ว"
+    ],
+    correctIndex: 2,
+    explanation: "เป็นการชื่นชมและค้นหาผู้มีอำนาจตัดสินใจตัวจริง (Decision Maker)"
+  },
+  {
+    id: 'q7',
+    qType: 'single',
+    text: "คำถามใดช่วยกระตุ้นให้ลูกค้าเห็นภาพ 'ปัญหา' ในอนาคตได้ดีที่สุด?",
+    options: [
+      "พี่อยากรวยไหมครับ?",
+      "ถ้าวันนี้พี่ไม่อยู่ รายได้ที่หายไปจะกระทบความเป็นอยู่ของลูกๆ อย่างไรบ้างครับ?",
+      "ประกันของพี่หมดอายุเมื่อไหร่ครับ?",
+      "พี่จ่ายเบี้ยไหวที่เท่าไหร่ครับ?"
+    ],
+    correctIndex: 1,
+    explanation: "เป็นคำถามประเภท Disturbing Question เพื่อให้ลูกค้าตระหนักถึงความสำคัญ"
+  },
+  {
+    id: 'q8',
+    qType: 'multi',
+    text: "คำถามใดเป็น 'คำถามปิด' (Closed Question) ที่ควรหลีกเลี่ยงในช่วงแรกของการสนทนา (เลือกให้ครบ)",
+    options: [
+      "สนใจทำประกันเพิ่มไหมครับ?",
+      "พี่วางแผนเกษียณไว้อย่างไรครับ?",
+      "ตอนนี้พี่มีประกันโรคร้ายแรงหรือยังครับ?",
+      "พี่คิดว่าค่ารักษาพยาบาลแพงไหมครับ?"
+    ],
+    correctIndices: [0, 2, 3],
+    explanation: "คำถามปิดทำให้บทสนทนาสะดุดหรือจบเร็ว ควรใช้คำถามเปิดในช่วงแรก"
+  },
+  {
+    id: 'q9',
+    qType: 'single',
+    text: "ข้อใดคือวัตถุประสงค์หลักของการใช้คำถามปลายเปิด?",
+    options: [
+      "เพื่อปิดการขายให้เร็วที่สุด",
+      "เพื่อให้ลูกค้าพูดระบายความในใจและบอกความต้องการ",
+      "เพื่อโชว์ความรู้ของตัวแทน",
+      "เพื่อต้อนให้ลูกค้าจนมุม"
+    ],
+    correctIndex: 1,
+    explanation: "คำถามเปิดมีไว้เพื่อฟังลูกค้า (Listen) และค้นหา Needs"
+  },
+  {
+    id: 'q10',
+    qType: 'single',
+    text: "ถ้าลูกค้าเงียบไปหลังจากเราบอกราคาเบี้ย ควรทำอย่างไร?",
+    options: [
+      "เงียบรอให้ลูกค้าเป็นฝ่ายพูดก่อน (Silence Technique)",
+      "รีบลดทุนประกันทันที",
+      "ถามว่า 'แพงไปไหมครับ'",
+      "เปลี่ยนเรื่องคุยทันที"
+    ],
+    correctIndex: 0,
+    explanation: "การเงียบช่วยให้ลูกค้าได้ใช้เวลาคิด หากเรารีบพูดแทรกอาจเสียโอกาสปิดการขาย"
+  }
+];
+
+const PYRAMID_POOL = [
+  // --- Original ---
+  {
+    id: 'p1',
+    qType: 'order',
+    text: "จงเรียงลำดับ 'พีระมิดทางการเงิน' จากฐานล่าง (สำคัญที่สุด) ไปสู่ยอดบน",
+    items: [
+      { id: 'wealth', label: "การลงทุน (Investment)" },
+      { id: 'protect', label: "การป้องกันความเสี่ยง (Protection)" },
+      { id: 'save', label: "การออม (Accumulation)" }
+    ],
+    correctOrderIds: ['protect', 'save', 'wealth'],
+    explanation: "ต้องเริ่มจาก Protection (ฐาน) -> Saving (กลาง) -> Investment (ยอด) เสมอ"
+  },
+  {
+    id: 'p2',
+    qType: 'single',
+    text: "ลูกค้ามีเงินเก็บ 1 ล้านบาท แต่ไม่มีประกันสุขภาพเลย และอยากเอาเงินไปลง Crypto ทั้งหมด ท่านควรแนะนำอย่างไรตามหลักพีระมิด?",
+    options: [
+      "แนะนำให้ลงทุนเลย ผลตอบแทนสูง",
+      "แบ่งเงิน 50% ลงทุน อีก 50% ฝากออมทรัพย์",
+      "แนะนำให้กันเงินส่วนหนึ่งทำประกันสุขภาพเพื่อปิดความเสี่ยงก่อน แล้วส่วนที่เหลือค่อยนำไปลงทุน",
+      "ให้ทำประกันสะสมทรัพย์ทั้งหมด"
+    ],
+    correctIndex: 2,
+    explanation: "ตามหลักต้องปิดฐานพีระมิด (Protection) ก่อน เพื่อไม่ให้เงินลงทุนหายไปเมื่อเจ็บป่วย"
+  },
+  {
+    id: 'p3',
+    qType: 'multi',
+    text: "สินค้าการเงินใด จัดอยู่ในส่วน 'ฐานราก' (Risk Transfer/Protection) ของพีระมิด (เลือกให้ครบ)",
+    options: [
+      "ประกันสุขภาพแบบเหมาจ่าย",
+      "กองทุนรวมตราสารหนี้",
+      "ประกันอุบัติเหตุส่วนบุคคล (PA)",
+      "ประกันชีวิตแบบตลอดชีพ (คุ้มครองภาระหนี้สิน)"
+    ],
+    correctIndices: [0, 2, 3],
+    explanation: "ฐานรากคือการโอนย้ายความเสี่ยง ได้แก่ สุขภาพ, อุบัติเหตุ และการคุ้มครองชีวิต/หนี้สิน"
+  },
+  // --- New Additions ---
+  {
+    id: 'p4',
+    qType: 'single',
+    text: "การวางแผนเกษียณอายุ (Retirement Planning) มักจัดอยู่ในส่วนใดของพีระมิด?",
+    options: [
+      "ฐานราก (Protection)",
+      "ส่วนกลาง (Saving & Accumulation)",
+      "ยอดพีระมิด (Wealth Distribution)",
+      "อยู่นอกพีระมิด"
+    ],
+    correctIndex: 1,
+    explanation: "การเกษียณเป็นการสะสมเงินระยะยาว (Accumulation) เพื่อใช้ในอนาคต"
+  },
+  {
+    id: 'p5',
+    qType: 'order',
+    text: "เรียงลำดับความเสี่ยงของสินทรัพย์จาก ต่ำ -> สูง",
+    items: [
+      { id: 'stock', label: "หุ้นสามัญ" },
+      { id: 'bond', label: "พันธบัตรรัฐบาล" },
+      { id: 'deposit', label: "เงินฝากออมทรัพย์" }
+    ],
+    correctOrderIds: ['deposit', 'bond', 'stock'],
+    explanation: "เงินฝากเสี่ยงต่ำสุด -> พันธบัตร -> หุ้นเสี่ยงสูงสุด"
+  },
+  {
+    id: 'p6',
+    qType: 'multi',
+    text: "เหตุใดเราจึงไม่ควรข้ามขั้นตอนการสร้างฐานพีระมิด (Protection)? (เลือกให้ครบ)",
+    options: [
+      "เพราะหากเกิดเหตุไม่คาดฝัน เงินออมและการลงทุนอาจต้องถูกถอนออกมาใช้จนหมด",
+      "เพราะเบี้ยประกันจะแพงขึ้นเมื่ออายุมากขึ้น",
+      "เพราะกฎหมายบังคับ",
+      "เพราะเป็นรากฐานความมั่นคงของครอบครัว"
+    ],
+    correctIndices: [0, 1, 3],
+    explanation: "การไม่มี Protection ทำให้สินทรัพย์อื่นไม่ปลอดภัยเมื่อเกิดวิกฤตสุขภาพหรือชีวิต"
+  },
+  {
+    id: 'p7',
+    qType: 'single',
+    text: "ลูกค้าต้องการ 'ลดหย่อนภาษี' เป็นหลัก แต่ยังไม่มีความคุ้มครองสุขภาพ ควรแนะนำผลิตภัณฑ์ใดที่ตอบโจทย์ทั้งคู่ได้ดีที่สุด?",
+    options: [
+      "ประกันชีวิตแบบบำนาญ",
+      "ประกันชีวิตคุ้มครองตลอดชีพ + สัญญาเพิ่มเติมสุขภาพ",
+      "กองทุน RMF",
+      "ประกันออมทรัพย์ระยะสั้น"
+    ],
+    correctIndex: 1,
+    explanation: "ได้ทั้งฐานราก (สุขภาพ) และลดหย่อนภาษี (ประกันชีวิต) ไปพร้อมกัน"
+  },
+  {
+    id: 'p8',
+    qType: 'single',
+    text: "Wealth Distribution (การส่งต่อความมั่งคั่ง) อยู่ส่วนใดของพีระมิด?",
+    options: ["ฐานล่างสุด", "ตรงกลาง", "ยอดบนสุด"],
+    correctIndex: 2,
+    explanation: "เป็นขั้นตอนสุดท้ายเมื่อมีความมั่งคั่งเหลือพอที่จะส่งต่อให้ทายาท"
+  },
+  {
+    id: 'p9',
+    qType: 'order',
+    text: "เรียงลำดับความจำเป็นพื้นฐานทางการเงิน (Needs Priority)",
+    items: [
+      { id: 'invest', label: "ลงทุนเพื่อความมั่งคั่ง" },
+      { id: 'health', label: "ค่ารักษาพยาบาล (Health)" },
+      { id: 'food', label: "ค่าใช้จ่ายปัจจัย 4 รายวัน" }
+    ],
+    correctOrderIds: ['food', 'health', 'invest'],
+    explanation: "ต้องมีกินมีใช้ (ปัจจัย 4) -> มีความคุ้มครอง -> แล้วจึงนำเงินเหลือไปลงทุน"
+  },
+  {
+    id: 'p10',
+    qType: 'single',
+    text: "Unit Linked เหมาะกับส่วนใดของพีระมิดมากที่สุด?",
+    options: [
+      "เหมาะเฉพาะฐานรากเท่านั้น",
+      "สามารถตอบโจทย์ได้ทั้ง Protection และ Investment ขึ้นอยู่กับการออกแบบ",
+      "เหมาะเฉพาะยอดพีระมิดเท่านั้น",
+      "ไม่เกี่ยวข้องกับพีระมิด"
+    ],
+    correctIndex: 1,
+    explanation: "Unit Linked มีความยืดหยุ่น สามารถเน้นความคุ้มครอง (ฐาน) หรือเน้นลงทุน (ยอด) ได้ตามสัดส่วนที่เลือก"
+  }
+];
+
+const CALC_POOL = [
+  // --- Original ---
+  {
+    id: 'c1',
+    qType: 'input',
+    text: "นาย A มีรายจ่ายครอบครัวเดือนละ 20,000 บาท ต้องการทำทุนประกันเพื่อคุ้มครองรายจ่ายนี้ให้ครอบครัวอยู่ได้ 5 ปี ต้องทำทุนประกันเท่าไหร่? (ตอบเฉพาะตัวเลข)",
+    answer: 1200000,
+    explanation: "20,000 (ต่อเดือน) x 12 (เดือน) x 5 (ปี) = 1,200,000 บาท"
+  },
+  {
+    id: 'c2',
+    qType: 'input',
+    text: "คุณ B มีหนี้บ้าน 3 ล้านบาท มีเงินฝากและสินทรัพย์สภาพคล่อง 5 แสนบาท ต้องการทำประกันคุ้มครองหนี้สิน (Mortgage Protection) ต้องทำทุนเพิ่มอีกเท่าไหร่ให้พอดีหนี้? (ตอบเฉพาะตัวเลข)",
+    answer: 2500000,
+    explanation: "หนี้สิน 3,000,000 - สินทรัพย์ 500,000 = ขาดอีก 2,500,000 บาท"
+  },
+  {
+    id: 'c3',
+    qType: 'single',
+    text: "ลูกค้าเป็นเสาหลัก มีรายได้ปีละ 1,000,000 บาท ต้องการทำประกันแบบ Income Protection 5 ปี แต่มีประกันกลุ่มคุ้มครองอยู่แล้ว 1 ล้านบาท ควรเสนอขายทุนประกันเพิ่มเท่าไหร่?",
+    options: ["5,000,000 บาท", "4,000,000 บาท", "3,000,000 บาท"],
+    correctIndex: 1,
+    explanation: "ความต้องการ (1,000,000 x 5) = 5 ล้าน หักของเดิม 1 ล้าน = ต้องทำเพิ่ม 4,000,000 บาท"
+  },
+  // --- New Additions ---
+  {
+    id: 'c4',
+    qType: 'input',
+    text: "ต้องการเตรียมทุนการศึกษาให้ลูก ปีละ 200,000 บาท เป็นเวลา 4 ปี (ปริญญาตรี) ปัจจุบันยังไม่มีเงินเก็บส่วนนี้ ต้องทำทุนประกันเพื่อคุ้มครองวงเงินนี้เท่าไหร่?",
+    answer: 800000,
+    explanation: "200,000 x 4 ปี = 800,000 บาท"
+  },
+  {
+    id: 'c5',
+    qType: 'input',
+    text: "นาย ก. มีรายได้ปีละ 500,000 บาท ต้องการทำประกันคุ้มครองความสามารถในการหารายได้ (Human Life Value) 10 ปี ต้องทำทุนประกันเท่าไหร่?",
+    answer: 5000000,
+    explanation: "500,000 x 10 ปี = 5,000,000 บาท"
+  },
+  {
+    id: 'c6',
+    qType: 'input',
+    text: "ลูกค้ามีค่าใช้จ่ายคงที่ต่อเดือน 30,000 บาท หากต้องการเงินสำรองฉุกเฉิน (Emergency Fund) 6 เดือน ควรมีเงินสดสำรองไว้อย่างน้อยเท่าไหร่?",
+    answer: 180000,
+    explanation: "30,000 x 6 เดือน = 180,000 บาท"
+  },
+  {
+    id: 'c7',
+    qType: 'single',
+    text: "หากคำนวณความจำเป็นทุนประกันได้ 10 ล้านบาท แต่ลูกค้ามีงบประมาณจำกัดมาก ควรแนะนำอย่างไร?",
+    options: [
+      "ให้ทำทุน 10 ล้านเท่าเดิม แต่เป็นแบบชั่วระยะเวลา (Term) เพื่อให้เบี้ยถูกลงและได้ความคุ้มครองครบ",
+      "ให้ลดทุนเหลือ 1 ล้านบาทแล้วทำแบบสะสมทรัพย์",
+      "บอกให้ลูกค้าไปหาเงินมาเพิ่ม",
+      "ไม่ขายเลยถ้าไม่ได้ทุนตามเป้า"
+    ],
+    correctIndex: 0,
+    explanation: "แบบชั่วระยะเวลา (Term) ตอบโจทย์ความคุ้มครองสูงในเบี้ยที่ต่ำ เหมาะกับการปิดความเสี่ยงหลักเมื่อขัดสนงบ"
+  },
+  {
+    id: 'c8',
+    qType: 'input',
+    text: "ค่ารักษาพยาบาลโรคร้ายแรงโดยเฉลี่ยปัจจุบันอยู่ที่ 2,000,000 บาท หากลูกค้ามีสวัสดิการบริษัทอยู่ 500,000 บาท ควรทำประกันโรคร้ายแรงเพิ่มวงเงินเท่าไหร่จึงจะครอบคลุมค่าเฉลี่ย?",
+    answer: 1500000,
+    explanation: "2,000,000 - 500,000 = 1,500,000 บาท"
+  },
+  {
+    id: 'c9',
+    qType: 'single',
+    text: "สูตรคำนวณทุนประกันแบบ Expense Method คิดจากอะไร?",
+    options: [
+      "รายได้รวม x จำนวนปี",
+      "ค่าใช้จ่ายต่อเดือน x 12 x จำนวนปีที่ต้องการให้ครอบครัวปรับตัว",
+      "หนี้สินทั้งหมดที่มี",
+      "สินทรัพย์ - หนี้สิน"
+    ],
+    correctIndex: 1,
+    explanation: "Expense Method เน้นดูภาระค่าใช้จ่ายจริงที่ครอบครัวต้องแบกรับ"
+  },
+  {
+    id: 'c10',
+    qType: 'input',
+    text: "พ่อบ้านมีภาระผ่อนรถเดือนละ 10,000 บาท เหลืออีก 5 ปีจึงจะหมดหนี้ หากต้องการทำประกันเพื่อคุ้มครองหนี้ก้อนนี้ ต้องทำทุนประกันเท่าไหร่?",
+    answer: 600000,
+    explanation: "10,000 x 12 เดือน x 5 ปี = 600,000 บาท"
+  }
+];
+
+
+// --- COMPONENTS ---
+
+const WelcomeScreen = ({ onStart }) => (
+  <div className="min-h-screen w-full luxury-gradient flex flex-col items-center justify-center text-white relative overflow-hidden">
+    {/* Background Decorations */}
+    <div className="absolute top-10 left-10 opacity-20 animate-float">
+       <Shield size={120} />
+    </div>
+    <div className="absolute bottom-10 right-10 opacity-20 animate-float" style={{ animationDelay: '2s' }}>
+       <Target size={120} />
+    </div>
+    
+    {/* Content */}
+    <div className="z-10 text-center px-4 animate-slide-up">
+      <div className="mb-6 flex justify-center">
+        <div className="bg-white/10 backdrop-blur-md p-4 rounded-full border border-white/20 shadow-2xl">
+           <Award size={64} className="text-yellow-400" />
+        </div>
+      </div>
+      
+      <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-2 drop-shadow-lg font-serif">
+        PRU BA <span className="text-yellow-400">Workshop</span>
+      </h1>
+      <p className="text-lg md:text-xl text-red-100 font-light tracking-widest mb-12 uppercase opacity-90">
+        Professional Bancassurance Training
+      </p>
+
+      <button 
+        onClick={onStart}
+        className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-red-900 transition-all duration-200 bg-white font-pj rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-900 hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.5)]"
+      >
+        <span className="absolute inset-0 w-full h-full -mt-1 rounded-full opacity-30 bg-gradient-to-b from-transparent via-transparent to-gray-200"></span>
+        <span className="relative flex items-center gap-3 text-lg">
+          START WORKSHOP <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+        </span>
+      </button>
+      
+      <div className="mt-16 animate-slide-up animate-delay-200">
+        <p className="text-xs text-red-200 uppercase tracking-widest mb-2">Powered by</p>
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-2xl font-bold text-white drop-shadow-md">PRU ACADEMY</span>
+          <div className="flex items-center gap-2 text-red-300 text-sm font-medium bg-black/20 px-4 py-1 rounded-full">
+            <Sparkles size={14} />
+            <span>ttb training team</span>
+            <Sparkles size={14} />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const Header = ({ onHome, title }) => (
+  <header className="bg-gradient-to-r from-red-800 via-red-700 to-red-900 text-white p-4 shadow-lg flex items-center justify-between sticky top-0 z-20 border-b border-red-900">
+    <div className="flex items-center gap-3 cursor-pointer" onClick={onHome}>
+      <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
+        <Shield size={24} className="text-white" />
+      </div>
+      <div>
+        <h1 className="text-lg font-bold leading-none tracking-wide">PRU BA Workshop <span className="text-yellow-400 text-xs ml-1">PRO</span></h1>
+        <p className="text-[10px] text-red-200 opacity-80 uppercase tracking-wider">{title || "PRU ACADEMY x ttb training"}</p>
+      </div>
+    </div>
+    {onHome && (
+      <button onClick={onHome} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors backdrop-blur-sm">
+        <Home size={20} />
+      </button>
+    )}
+  </header>
+);
+
+const GameScreen = ({ pool, title, color, onFinish, onHome }) => {
+  const [questions, setQuestions] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [gameState, setGameState] = useState('loading');
+  const [feedback, setFeedback] = useState(null);
+  
+  // State for specific inputs
+  const [multiSelected, setMultiSelected] = useState([]);
+  const [orderList, setOrderList] = useState([]);
+  const [inputVal, setInputVal] = useState('');
+
+  // Config: Number of questions per round
+  const QUESTIONS_PER_ROUND = 10;
+
+  useEffect(() => {
+    // Randomize questions on mount
+    const selected = getRandomSubset(pool, QUESTIONS_PER_ROUND);
+    setQuestions(selected);
+    if (selected[0]?.qType === 'order') {
+       setOrderList(shuffleArray([...selected[0].items]));
+    }
+    setGameState('playing');
+  }, [pool]);
+
+  const handleNext = () => {
+    setFeedback(null);
+    setMultiSelected([]);
+    setInputVal('');
+    
+    if (currentIdx < questions.length - 1) {
+      const nextQ = questions[currentIdx + 1];
+      setCurrentIdx(c => c + 1);
+      if (nextQ.qType === 'order') {
+        setOrderList(shuffleArray([...nextQ.items]));
+      }
+      setGameState('playing');
+    } else {
+      setGameState('summary');
+    }
+  };
+
+  const submitAnswer = (answerData) => {
+    const q = questions[currentIdx];
+    let isCorrect = false;
+
+    if (q.qType === 'single') {
+      isCorrect = answerData === q.correctIndex;
+    } else if (q.qType === 'multi') {
+      const sortedAns = [...answerData].sort();
+      const sortedCorr = [...q.correctIndices].sort();
+      isCorrect = JSON.stringify(sortedAns) === JSON.stringify(sortedCorr);
+    } else if (q.qType === 'order') {
+      const currentOrderIds = answerData.map(item => item.id);
+      isCorrect = JSON.stringify(currentOrderIds) === JSON.stringify(q.correctOrderIds);
+    } else if (q.qType === 'input') {
+      const val = parseInt(answerData.replace(/,/g, '').trim());
+      isCorrect = val === q.answer;
+    }
+
+    if (isCorrect) setScore(s => s + 1);
+
+    setFeedback({
+      isCorrect,
+      explanation: q.explanation
+    });
+    setGameState('feedback');
+  };
+
+  const handleInputChange = (e) => {
+    const rawVal = e.target.value.replace(/[^0-9]/g, '');
+    if (rawVal) {
+      setInputVal(formatNumber(rawVal));
+    } else {
+      setInputVal('');
+    }
+  };
+
+  if (gameState === 'loading') return <div className="p-10 text-center flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-red-500 rounded-full border-t-transparent"></div></div>;
+
+  if (gameState === 'summary') {
+    return (
+      <div className="max-w-md mx-auto mt-8 px-4 animate-slide-up">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+          <div className={`p-8 text-center text-white luxury-gradient`}>
+             <Award size={64} className="mx-auto mb-4 text-yellow-400 drop-shadow-md" />
+             <h2 className="text-3xl font-bold mb-1">บทสรุปคะแนน</h2>
+             <p className="opacity-80 text-sm font-light">{title}</p>
+          </div>
+          <div className="p-8 text-center">
+            <div className="text-6xl font-bold text-gray-800 mb-2 tracking-tight">{score} <span className="text-2xl text-gray-400 font-normal">/ {questions.length}</span></div>
+            <p className="text-gray-600 mb-8 font-medium">
+              {score >= questions.length * 0.8 ? "ยอดเยี่ยม! คุณคือสุดยอดนักขาย" : "ลองทบทวนอีกครั้ง คุณทำได้แน่นอน"}
+            </p>
+            <div className="space-y-3">
+              <button onClick={() => window.location.reload()} className="w-full py-3 bg-red-900 text-white rounded-xl font-bold hover:bg-red-800 transition-all flex justify-center items-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                <RefreshCcw size={18} /> ทดสอบชุดใหม่ (สุ่ม)
+              </button>
+              <button onClick={onHome} className="w-full py-3 bg-gray-50 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-all border border-gray-200">
+                กลับเมนูหลัก
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const q = questions[currentIdx];
+
+  return (
+    <div className="max-w-2xl mx-auto mt-6 px-4 pb-24 animate-slide-up">
+      {/* Progress Bar */}
+      <div className="mb-6">
+        <div className="flex justify-between text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">
+          <span>Question {currentIdx + 1} of {questions.length}</span>
+          <span className="text-red-700">Score: {score}</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+          <div 
+            className="h-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(0,0,0,0.2)]" 
+            style={{ width: `${((currentIdx + 1) / questions.length) * 100}%`, backgroundColor: color }}
+          />
+        </div>
+      </div>
+
+      {/* Question Card */}
+      <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 relative" style={{ borderTopColor: color }}>
+        <span className={`absolute top-0 right-0 px-3 py-1 text-[10px] font-bold text-white rounded-bl-xl uppercase tracking-wider shadow-sm`} style={{ backgroundColor: color }}>
+          {q.qType === 'multi' ? 'Multiple Select' : q.qType === 'order' ? 'Ordering' : q.qType === 'input' ? 'Calculation' : 'Single Choice'}
+        </span>
+        <h3 className="text-lg md:text-xl font-semibold text-gray-800 mt-4 leading-relaxed">{q.text}</h3>
+      </div>
+
+      {/* Interaction Area */}
+      <div className="space-y-4">
+        {/* SINGLE CHOICE */}
+        {q.qType === 'single' && (
+          <div className="grid gap-3">
+            {q.options.map((opt, idx) => (
+              <button
+                key={idx}
+                disabled={gameState === 'feedback'}
+                onClick={() => submitAnswer(idx)}
+                className={`w-full text-left p-5 rounded-xl border-2 transition-all transform active:scale-[0.99] ${
+                  gameState === 'feedback' 
+                    ? idx === q.correctIndex 
+                      ? 'border-green-500 bg-green-50 text-green-900 font-medium shadow-md'
+                      : 'border-gray-100 opacity-50'
+                    : 'border-gray-50 hover:border-red-200 hover:bg-white hover:shadow-md bg-gray-50'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* MULTIPLE CHOICE */}
+        {q.qType === 'multi' && (
+          <div>
+            <div className="grid gap-3 mb-6">
+              {q.options.map((opt, idx) => {
+                const isSelected = multiSelected.includes(idx);
+                return (
+                  <button
+                    key={idx}
+                    disabled={gameState === 'feedback'}
+                    onClick={() => {
+                      if (isSelected) setMultiSelected(multiSelected.filter(i => i !== idx));
+                      else setMultiSelected([...multiSelected, idx]);
+                    }}
+                    className={`w-full text-left p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
+                      isSelected 
+                        ? 'border-red-500 bg-red-50 text-red-900 font-medium ring-1 ring-red-200' 
+                        : 'border-gray-50 bg-gray-50 hover:bg-white hover:border-gray-200'
+                    }`}
+                  >
+                    <div className={`w-6 h-6 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white'}`}>
+                      {isSelected && <CheckCircle size={14} className="text-white" />}
+                    </div>
+                    <span>{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {gameState !== 'feedback' && (
+              <button 
+                onClick={() => submitAnswer(multiSelected)}
+                className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all active:scale-95 shadow-lg"
+                disabled={multiSelected.length === 0}
+              >
+                CONFIRM ANSWER
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ORDERING */}
+        {q.qType === 'order' && (
+          <div>
+             <div className="text-sm text-gray-500 mb-2 text-center flex items-center justify-center gap-1">
+               <ChevronUp size={14}/> แตะลูกศรเพื่อเลื่อนลำดับ <ChevronDown size={14}/>
+             </div>
+             <div className="space-y-2 mb-6">
+                {orderList.map((item, idx) => (
+                  <div key={item.id} className="bg-white border border-gray-200 p-4 rounded-xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                    <span className="font-medium text-gray-700 flex-1">{idx + 1}. {item.label}</span>
+                    {gameState !== 'feedback' && (
+                      <div className="flex gap-2 ml-4">
+                         <button 
+                           onClick={() => {
+                             if(idx === 0) return;
+                             const newList = [...orderList];
+                             [newList[idx], newList[idx-1]] = [newList[idx-1], newList[idx]];
+                             setOrderList(newList);
+                           }}
+                           className={`p-2 rounded-lg transition-colors ${idx === 0 ? 'text-gray-200' : 'bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-700'}`}
+                           disabled={idx===0}
+                         >
+                           <ChevronUp size={20} />
+                         </button>
+                         <button 
+                           onClick={() => {
+                             if(idx === orderList.length-1) return;
+                             const newList = [...orderList];
+                             [newList[idx], newList[idx+1]] = [newList[idx+1], newList[idx]];
+                             setOrderList(newList);
+                           }}
+                           className={`p-2 rounded-lg transition-colors ${idx === orderList.length-1 ? 'text-gray-200' : 'bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-700'}`}
+                           disabled={idx===orderList.length-1}
+                         >
+                           <ChevronDown size={20} />
+                         </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+             </div>
+             {gameState !== 'feedback' && (
+               <button 
+                 onClick={() => submitAnswer(orderList)}
+                 className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all active:scale-95 shadow-lg"
+               >
+                 CONFIRM ORDER
+               </button>
+             )}
+          </div>
+        )}
+
+        {/* INPUT CALCULATION */}
+        {q.qType === 'input' && (
+          <div>
+            <div className="relative">
+              <input 
+                type="text"
+                placeholder="0"
+                className="w-full p-6 pl-6 text-3xl font-mono border-2 border-gray-200 rounded-xl focus:border-red-500 focus:outline-none mb-4 text-right shadow-inner bg-gray-50 focus:bg-white transition-colors"
+                value={inputVal}
+                onChange={handleInputChange}
+                disabled={gameState === 'feedback'}
+              />
+              <span className="absolute right-4 top-8 text-gray-400 font-bold text-sm">THB</span>
+            </div>
+            {gameState !== 'feedback' && (
+               <button 
+                 onClick={() => submitAnswer(inputVal)}
+                 className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all active:scale-95 shadow-lg"
+                 disabled={!inputVal}
+               >
+                 SUBMIT ANSWER
+               </button>
+             )}
+          </div>
+        )}
+      </div>
+
+      {/* Feedback Panel */}
+      {feedback && (
+        <div className={`mt-8 rounded-xl p-6 border-l-4 shadow-xl animate-slide-up bg-white ${feedback.isCorrect ? 'border-l-green-500' : 'border-l-red-500'}`}>
+          <div className="flex items-center gap-3 mb-4">
+            {feedback.isCorrect ? <CheckCircle className="text-green-500" size={28} /> : <XCircle className="text-red-500" size={28} />}
+            <span className={`text-xl font-bold ${feedback.isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+              {feedback.isCorrect ? 'ถูกต้อง!' : 'ยังไม่ถูกนะครับ'}
+            </span>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg text-gray-700 leading-relaxed font-medium border border-gray-100">
+            {feedback.explanation}
+          </div>
+          <button 
+            onClick={handleNext}
+            className="mt-6 w-full py-3 bg-gray-800 text-white rounded-lg font-bold hover:bg-gray-900 transition-all flex items-center justify-center gap-2 group"
+          >
+            {currentIdx < questions.length - 1 ? 'ข้อถัดไป' : 'ดูสรุปผล'} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MenuCard = ({ title, desc, icon: Icon, color, onClick, questionCount }) => (
+  <button 
+    onClick={onClick}
+    className="w-full bg-white rounded-2xl shadow-sm hover:shadow-2xl transition-all duration-300 p-6 text-left border border-gray-100 group relative overflow-hidden h-full flex flex-col justify-between"
+  >
+    {/* Hover Gradient Overlay */}
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/0 group-hover:to-gray-50 transition-all"></div>
+    
+    <div>
+      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:scale-110 transition-transform duration-500 rotate-12">
+        <Icon size={100} style={{ color }} />
+      </div>
+      
+      <div className="relative z-10">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-lg transform group-hover:-translate-y-1 transition-transform`} style={{ backgroundColor: color }}>
+          <Icon size={28} className="text-white" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-red-700 transition-colors">{title}</h3>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">{desc}</p>
+      </div>
+    </div>
+
+    <div className="relative z-10 mt-auto">
+      <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+         <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-gray-50 px-2 py-1 rounded">
+          <Layers size={12} />
+          <span>Pool: {questionCount}</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs font-bold text-red-600">
+           <span>Start</span> <ArrowRight size={12} />
+        </div>
+      </div>
+    </div>
+  </button>
+);
+
+export default function App() {
+  const [started, setStarted] = useState(false);
+  const [activeModule, setActiveModule] = useState(null);
+
+  const modules = {
+    fab: {
+      title: "F-A-B Analysis",
+      desc: "วิเคราะห์ Feature, Advantage, Benefit เพื่อการนำเสนอที่ทรงพลัง",
+      icon: Target,
+      color: "#dc2626", // Red 600
+      pool: FAB_POOL
+    },
+    question: {
+      title: "Powerful Questions",
+      desc: "เทคนิคการตั้งคำถามเปิดใจและค้นหาความต้องการลูกค้า",
+      icon: MessageCircle,
+      color: "#2563eb", // Blue 600
+      pool: QUESTION_POOL
+    },
+    pyramid: {
+      title: "Financial Pyramid",
+      desc: "ลำดับความสำคัญทางการเงินและการเลือกผลิตภัณฑ์ที่เหมาะสม",
+      icon: TrendingUp,
+      color: "#d97706", // Amber 600
+      pool: PYRAMID_POOL
+    },
+    calc: {
+      title: "Capital Calculation",
+      desc: "คำนวณทุนประกันตามหลัก Expense & Income Protection",
+      icon: Calculator,
+      color: "#059669", // Emerald 600
+      pool: CALC_POOL
+    }
+  };
+
+  if (!started) {
+    return <WelcomeScreen onStart={() => setStarted(true)} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-gray-900">
+      <Header 
+        onHome={activeModule ? () => setActiveModule(null) : () => setStarted(false)} 
+        title={activeModule ? modules[activeModule].title : undefined}
+      />
+      
+      <main className="p-4 md:p-8 max-w-6xl mx-auto">
+        {!activeModule ? (
+          <div className="animate-slide-up">
+            <div className="text-center py-10 mb-6">
+              <h2 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-900 to-red-600 mb-4 tracking-tight">
+                Workshop Menu
+              </h2>
+              <p className="text-gray-500 max-w-xl mx-auto text-lg">
+                เลือกบทเรียนที่ต้องการฝึกฝน ระบบจะทำการสุ่มโจทย์ 10 ข้อเพื่อทดสอบความแม่นยำของคุณ
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 pb-12">
+              {Object.keys(modules).map(key => (
+                <MenuCard 
+                  key={key}
+                  {...modules[key]}
+                  onClick={() => setActiveModule(key)}
+                  questionCount={modules[key].pool.length}
+                />
+              ))}
+            </div>
+            
+            <div className="flex justify-center opacity-60 hover:opacity-100 transition-opacity pb-8">
+              <div className="bg-white px-6 py-3 rounded-full shadow-sm border border-gray-200 flex items-center gap-3 text-sm text-gray-500">
+                <Shield size={16} className="text-red-600" />
+                <span className="font-medium">All Rights Reserved by PRU ACADEMY</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <GameScreen 
+            pool={modules[activeModule].pool}
+            title={modules[activeModule].title}
+            color={modules[activeModule].color}
+            onHome={() => setActiveModule(null)}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+
